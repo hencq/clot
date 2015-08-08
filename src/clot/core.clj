@@ -13,6 +13,11 @@
      (and (number? top) (number? op)) (conj (pop stack) (+ top op))
      :default (conj stack op))))
 
+(defn- swap
+  "Swap the top of the stack with val"
+  [stack val]
+  (push (pop stack) val))
+
 (defn- append
   "Helper function to append an op"
   [[left right] op]
@@ -88,3 +93,58 @@
                        (push right cop))))
         ;; Append any trailing server side ops
         (reverse (reduce append [right left] (reverse server)))))))
+
+(defn compose
+  "Compose 2 ops"
+  [op1 op2]
+  (loop [op1 (vec (reverse op1)) ;convert ops to stacks
+         op2 (vec (reverse op2))
+         res []]
+    (let [c1 (peek op1)
+          c2 (peek op2)]
+      (println op1 op2 res)
+      (if c1
+        (cond
+         ;; No more ops in op2
+         (nil? c2) (recur
+                    (pop op1)
+                    op2
+                    (push res c1))
+         ;; Delete
+         (map? c1) (recur
+                    (pop op1)
+                    op2
+                    (push res c1))
+         ;; Insert
+         (string? c1) (cond
+                       (number? c2) (recur
+                                     (pop op1)
+                                     (swap op2 (max (- c2 (count c1)) 0))
+                                     (push res c1))
+                       (string? c2) (recur
+                                     (pop op1)
+                                     op2
+                                     (push res c1))
+                       (map? c2) (let [len (min (:d c2) (count c1))
+                                       c1 (subs c1 len)
+                                       c2 {:d (- (:d c2) len)}]
+                                   (recur
+                                    (swap op1 c1)
+                                    (swap op2 c2)
+                                    res)))
+         (number? c1) (cond
+                       (number? c2) (let [skp (min c1 c2)]
+                                      (recur
+                                       (swap op1 (- c1 skp))
+                                       (swap op2 (- c2 skp))
+                                       (push res skp)))
+                       (string? c2) (recur
+                                     op1
+                                     (pop op2)
+                                     (push res c2))
+                       (map? c2) (let [skp (min (:d c2) c1)]
+                                   (recur
+                                    (swap op1 (- c1 skp))
+                                    (swap op2 {:d (- (:d c2) skp)})
+                                    (push res {:d skp})))))
+        (concat res (reverse op2))))))
