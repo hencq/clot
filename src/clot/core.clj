@@ -110,21 +110,27 @@
                     (pop op1)
                     op2
                     (push res c1))
-         ;; Delete
+         ;; If the first operation is a delete, it can't affect op2, so just
+         ;; push it on the result stack
          (map? c1) (recur
                     (pop op1)
                     op2
                     (push res c1))
          ;; Insert
          (string? c1) (cond
+                       ;; reduce the number skips by the length of the inserted
+                       ;; string
                        (number? c2) (recur
                                      (pop op1)
                                      (swap op2 (max (- c2 (count c1)) 0))
                                      (push res c1))
+                       ;; insert the first string first
                        (string? c2) (recur
                                      (pop op1)
                                      op2
                                      (push res c1))
+                       ;; insert followed by a delete should cancel each
+                       ;; other out
                        (map? c2) (let [len (min (:d c2) (count c1))
                                        c1 (subs c1 len)
                                        c2 {:d (- (:d c2) len)}]
@@ -132,19 +138,25 @@
                                     (swap op1 c1)
                                     (swap op2 c2)
                                     res)))
+         ;; Skip
          (number? c1) (cond
+                       ;; Skip longest common skip
                        (number? c2) (let [skp (min c1 c2)]
                                       (recur
                                        (swap op1 (- c1 skp))
                                        (swap op2 (- c2 skp))
                                        (push res skp)))
+                       ;; Inserting after skip does not affect the skip
+                       ;; (since op1 didn't know about it yet)
                        (string? c2) (recur
                                      op1
                                      (pop op2)
                                      (push res c2))
+                       ;; Deletes cancel out the skips
                        (map? c2) (let [skp (min (:d c2) c1)]
                                    (recur
                                     (swap op1 (- c1 skp))
                                     (swap op2 {:d (- (:d c2) skp)})
                                     (push res {:d skp})))))
+        ;; just concat the remaining ops
         (concat res (reverse op2))))))
